@@ -1,5 +1,6 @@
 import Flutter
 import Foundation
+import VLCKit
 
 public class VLCViewBuilder: NSObject, VlcPlayerApi {
     var players = [Int: VLCViewController]()
@@ -8,34 +9,70 @@ public class VLCViewBuilder: NSObject, VlcPlayerApi {
     private var options: [String]
     
     init(registrar: FlutterPluginRegistrar) {
+        print("🔧 [VLC Builder] Initializing VLCViewBuilder...")
+        
         self.registrar = registrar
         messenger = registrar.messenger()
         options = []
+        
+        print("🔧 [VLC Builder] Registrar: \(registrar)")
+        print("🔧 [VLC Builder] Messenger: \(messenger)")
+        
         super.init()
-        //
+        
+        print("🔧 [VLC Builder] Setting up VlcPlayerApi with messenger...")
         VlcPlayerApiSetup.setUp(binaryMessenger: messenger, api: self)
+        print("✅ [VLC Builder] Successfully set up VlcPlayerApi")
+        
+        print("🔧 [VLC Builder] VLCViewBuilder initialization completed")
     }
     
+
+    
     public func build(frame: CGRect, viewId: Int64) -> VLCViewController {
-        //
-        var vlcViewController: VLCViewController
-        vlcViewController = VLCViewController(frame: frame, viewId: viewId, messenger: messenger)
+        print("🔧 [VLC Builder] Building VLCViewController for viewId: \(viewId)")
+        print("🔧 [VLC Builder] Frame: \(frame)")
+        
+        let vlcViewController = VLCViewController(frame: frame, viewId: viewId, messenger: messenger)
+        print("✅ [VLC Builder] Successfully created VLCViewController")
+        
         players[viewId.int] = vlcViewController
+        print("🔧 [VLC Builder] Stored player with viewId: \(viewId)")
+        print("🔧 [VLC Builder] Total players: \(players.count)")
+        
         return vlcViewController
     }
     
     func getPlayer(id: Int64) throws -> VLCViewController {
+        print("🔧 [VLC API] getPlayer() called with ID: \(id)")
+        print("🔧 [VLC API] Available player IDs: \(Array(players.keys))")
+        
         guard let player = players[id.int] else {
+            print("❌ [VLC API] Player with id \(id) not found in players dictionary")
             throw PigeonError(code: "player_not_found", message: "Player with id \(id) not found", details: nil)
         }
         
+        print("✅ [VLC API] Found player for ID: \(id)")
         return player
     }
     
-    public func initialize() throws {}
+    public func initialize() throws {
+        print("🔧 [VLC API] initialize() called")
+        
+        // Check VLCKit availability
+        let vlcLibrary = VLCLibrary.shared()
+        print("🔧 [VLC API] VLCKit library: \(vlcLibrary)")
+        print("🔧 [VLC API] VLCKit version: \(vlcLibrary.version)")
+        
+        print("✅ [VLC API] initialize() completed successfully")
+    }
     
     func create(msg: CreateMessage) throws {
+        print("🔧 [VLC API] create() called with playerId: \(msg.playerId), uri: \(msg.uri)")
+        print("🔧 [VLC API] Available players: \(Array(players.keys))")
+        
         let player = try getPlayer(id: msg.playerId)
+        print("🔧 [VLC API] Found player for ID: \(msg.playerId)")
         
         var isAssetUrl = false
         var mediaUrl = ""
@@ -44,17 +81,21 @@ public class VLCViewBuilder: NSObject, VlcPlayerApi {
             var assetPath: String
             if let packageName = msg.packageName {
                 assetPath = registrar.lookupKey(forAsset: msg.uri, fromPackage: packageName)
+                print("🔧 [VLC API] Asset path with package \(packageName): \(assetPath)")
             } else {
                 assetPath = registrar.lookupKey(forAsset: msg.uri)
+                print("🔧 [VLC API] Asset path: \(assetPath)")
             }
             mediaUrl = assetPath
             isAssetUrl = true
         } else {
             mediaUrl = msg.uri
             isAssetUrl = false
+            print("🔧 [VLC API] Using direct URL: \(mediaUrl)")
         }
         
         options = msg.options
+        print("🔧 [VLC API] Options: \(options)")
         
         player.setMediaPlayerUrl(
             uri: mediaUrl,
@@ -63,13 +104,16 @@ public class VLCViewBuilder: NSObject, VlcPlayerApi {
             hwAcc: msg.hwAcc?.int ?? HWAccellerationType.HW_ACCELERATION_AUTOMATIC.rawValue,
             options: options
         )
+        print("✅ [VLC API] Successfully set media player URL")
     }
     
     func dispose(playerId: Int64) throws {
+        print("🔧 [VLC API] dispose() called with playerId: \(playerId)")
         let player = try getPlayer(id: playerId)
         
         player.dispose()
         players.removeValue(forKey: playerId.int)
+        print("✅ [VLC API] Successfully disposed player: \(playerId)")
     }
     
     func setStreamUrl(msg: SetMediaMessage) throws {
@@ -102,21 +146,27 @@ public class VLCViewBuilder: NSObject, VlcPlayerApi {
     }
     
     func play(playerId: Int64) throws {
+        print("🔧 [VLC API] play() called with playerId: \(playerId)")
         let player = try getPlayer(id: playerId)
         
         player.play()
+        print("✅ [VLC API] Successfully called play()")
     }
     
     func pause(playerId: Int64) throws {
+        print("🔧 [VLC API] pause() called with playerId: \(playerId)")
         let player = try getPlayer(id: playerId)
         
         player.pause()
+        print("✅ [VLC API] Successfully called pause()")
     }
     
     func stop(playerId: Int64) throws {
+        print("🔧 [VLC API] stop() called with playerId: \(playerId)")
         let player = try getPlayer(id: playerId)
         
         player.stop()
+        print("✅ [VLC API] Successfully called stop()")
     }
     
     func isPlaying(playerId: Int64) throws -> Bool {
@@ -183,7 +233,7 @@ public class VLCViewBuilder: NSObject, VlcPlayerApi {
     func setSpuTrack(playerId: Int64, spuTrackNumber: Int64) throws {
         let player = try getPlayer(id: playerId)
 
-        player.setSpuTrack(spuTrackNumber: spuTrackNumber.int32)
+        player.setSpuTrack(spuTrackNumber: spuTrackNumber.int)
     }
     
     func getSpuTrack(playerId: Int64) throws -> Int64 {
