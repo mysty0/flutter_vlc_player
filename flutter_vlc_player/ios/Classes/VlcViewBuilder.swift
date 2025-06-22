@@ -217,6 +217,39 @@ public class VLCViewBuilder: NSObject, VlcPlayerApi{
         return message
     }
     
+    // MARK: - Thumbnail Generation Methods
+    
+    /// Generate thumbnail from video file without needing a player instance
+    /// This is a static method that works independently of player instances
+    public func generateThumbnail(from uri: String, width: Int = 0, height: Int = 0, position: Float = 0.5) -> String? {
+        
+        print("🔧 [VLC Builder] Generating thumbnail for: \(uri)")
+        
+        // Use a semaphore to make the async operation synchronous for the platform interface
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: String? = nil
+        
+        VLCViewController.generateThumbnail(
+            from: uri,
+            width: width,
+            height: height,
+            position: position
+        ) { thumbnailBase64 in
+            result = thumbnailBase64
+            semaphore.signal()
+        }
+        
+        // Wait for completion (with a reasonable timeout)
+        let timeoutResult = semaphore.wait(timeout: .now() + 30.0) // 30 second timeout
+        
+        if timeoutResult == .timedOut {
+            print("❌ [VLC Builder] Thumbnail generation timed out")
+            return nil
+        }
+        
+        return result
+    }
+    
     public func getSpuTracksCount(_ input: ViewMessage, error: AutoreleasingUnsafeMutablePointer<FlutterError?>) -> TrackCountMessage? {
         
         let player = getPlayer(viewId: input.viewId)

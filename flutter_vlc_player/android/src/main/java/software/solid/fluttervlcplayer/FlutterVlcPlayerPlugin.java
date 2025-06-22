@@ -9,13 +9,16 @@ import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
+import io.flutter.plugin.common.MethodChannel;
 
 public class FlutterVlcPlayerPlugin implements FlutterPlugin, ActivityAware {
 
     private static FlutterVlcPlayerFactory flutterVlcPlayerFactory;
     private FlutterPluginBinding flutterPluginBinding;
+    private MethodChannel thumbnailChannel;
 
     private static final String VIEW_TYPE = "flutter_video_plugin/getVideoView";
+    private static final String THUMBNAIL_CHANNEL = "flutter_vlc_player/thumbnail";
 
     public FlutterVlcPlayerPlugin() {
     }
@@ -43,6 +46,11 @@ public class FlutterVlcPlayerPlugin implements FlutterPlugin, ActivityAware {
                     );
             //
         }
+        
+        // Setup thumbnail generation method channel
+        thumbnailChannel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), THUMBNAIL_CHANNEL);
+        thumbnailChannel.setMethodCallHandler(new ThumbnailMethodChannelHandler(flutterPluginBinding.getApplicationContext()));
+        
         startListening();
     }
 
@@ -50,6 +58,10 @@ public class FlutterVlcPlayerPlugin implements FlutterPlugin, ActivityAware {
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         stopListening();
         //
+        if (thumbnailChannel != null) {
+            thumbnailChannel.setMethodCallHandler(null);
+            thumbnailChannel = null;
+        }
 
         flutterPluginBinding = null;
     }

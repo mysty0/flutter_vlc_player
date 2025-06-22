@@ -3,25 +3,15 @@
 // found in the LICENSE file.
 export 'package:flutter_vlc_player_platform_interface/flutter_vlc_player_platform_interface.dart'
     show
+        DataSourceType,
         HwAcc,
+        VlcPlayerOptions,
         VlcMediaEvent,
         VlcMediaEventType,
         VlcRendererEvent,
-        VlcRendererEventType,
-        VlcSubtitleColor,
-        VlcSubtitleThickness,
-        VlcSubtitleTextDirection,
-        DataSourceType,
-        VlcPlayerOptions,
-        VlcAdvancedOptions,
-        VlcAudioOptions,
-        VlcHttpOptions,
-        VlcRtpOptions,
-        VlcStreamOutputOptions,
-        VlcVideoOptions,
-        VlcSubtitleOptions;
+        VlcRendererEventType;
 
-export 'src/enums/playing_state.dart' show PlayingState;
-export 'src/flutter_vlc_player.dart' show VlcPlayer;
-export 'src/vlc_player_controller.dart' show VlcPlayerController;
-export 'src/vlc_player_value.dart' show VlcPlayerValue;
+export 'src/enums/playing_state.dart';
+export 'src/flutter_vlc_player.dart';
+export 'src/vlc_player_controller.dart';
+export 'src/vlc_player_value.dart';

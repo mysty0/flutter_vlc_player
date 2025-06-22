@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_vlc_player/flutter_vlc_player.dart';
+import 'package:flutter_vlc_player_platform_interface/flutter_vlc_player_platform_interface.dart';
+import 'package:path_provider/path_provider.dart';
+
 import 'package:flutter_vlc_player_example/video_data.dart';
 import 'package:flutter_vlc_player_example/vlc_player_with_controls.dart';
-import 'package:path_provider/path_provider.dart';
 
 class SingleTab extends StatefulWidget {
   @override
@@ -23,6 +25,10 @@ class _SingleTabState extends State<SingleTab> {
 
   // ignore: avoid_late_keyword
   late final VlcPlayerController _controller;
+
+  // Thumbnail cache to store generated thumbnails
+  final Map<int, Uint8List?> _thumbnailCache = {};
+  final Map<int, bool> _thumbnailLoading = {};
 
   //
   List<VideoData> listVideos = [
@@ -70,6 +76,54 @@ class _SingleTabState extends State<SingleTab> {
 
     return temp;
   }
+
+  /// Generate thumbnail for a video at a specific index
+  Future<void> _generateThumbnail(int index) async {
+    if (_thumbnailLoading[index] == true ||
+        _thumbnailCache.containsKey(index)) {
+      return; // Already loading or cached
+    }
+
+    final video = listVideos[index];
+
+    // Only generate thumbnails for network videos (avoid file access issues in example)
+    if (video.type != VideoType.network) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _thumbnailLoading[index] = true;
+      });
+    } else {
+      return; // Don't continue if widget is disposed
+    }
+
+    try {
+      final thumbnailData = await VlcPlayerController.generateThumbnail(
+        dataSource: video.path,
+        width: 120,
+        height: 68,
+        position: 0.3, // 30% into the video
+      );
+
+      if (mounted) {
+        setState(() {
+          _thumbnailCache[index] = thumbnailData;
+          _thumbnailLoading[index] = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _thumbnailLoading[index] = false;
+        });
+      }
+      debugPrint('Error generating thumbnail for ${video.name}: $e');
+    }
+  }
+
+  bool _hasInitializedThumbnails = false;
 
   @override
   void initState() {
@@ -127,6 +181,31 @@ class _SingleTabState extends State<SingleTab> {
         debugPrint('OnRendererEventListener $type $id $name');
       }
     });
+
+    // Note: Automatic thumbnail generation will be enabled in didChangeDependencies()
+    // to avoid calling Theme.of(context) in initState()
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Generate thumbnails for network videos after a short delay (iOS only)
+    // Note: Disabled automatic generation for Android due to MediaMetadataRetriever limitations
+    // Users can still manually trigger thumbnail generation
+    if (!_hasInitializedThumbnails &&
+        Theme.of(context).platform == TargetPlatform.iOS) {
+      _hasInitializedThumbnails = true;
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          for (int i = 0; i < listVideos.length; i++) {
+            if (listVideos[i].type == VideoType.network) {
+              _generateThumbnail(i);
+            }
+          }
+        }
+      });
+    }
   }
 
   @override
@@ -139,15 +218,17 @@ class _SingleTabState extends State<SingleTab> {
             key: _key,
             controller: _controller,
             onStopRecording: (recordPath) {
-              setState(() {
-                listVideos.add(
-                  VideoData(
-                    name: 'Recorded Video',
-                    path: recordPath,
-                    type: VideoType.recorded,
-                  ),
-                );
-              });
+              if (mounted) {
+                setState(() {
+                  listVideos.add(
+                    VideoData(
+                      name: 'Recorded Video',
+                      path: recordPath,
+                      type: VideoType.recorded,
+                    ),
+                  );
+                });
+              }
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
@@ -158,6 +239,48 @@ class _SingleTabState extends State<SingleTab> {
             },
           ),
         ),
+
+        // Thumbnail functionality section
+        Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.image, color: Colors.blue[700]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Thumbnail Generation',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                Theme.of(context).platform == TargetPlatform.iOS
+                    ? 'Thumbnails are automatically generated for network videos using VLCMediaThumbnailer.'
+                    : 'Thumbnail generation is available for network videos. Tap the refresh icon to generate manually. '
+                        '(Note: Some network URLs may not be supported by Android MediaMetadataRetriever)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.blue[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+
         ListView.builder(
           shrinkWrap: true,
           itemCount: listVideos.length,
@@ -180,80 +303,212 @@ class _SingleTabState extends State<SingleTab> {
                 break;
             }
 
-            return ListTile(
-              dense: true,
-              selected: selectedVideoIndex == index,
-              selectedTileColor: Colors.black54,
-              leading: Icon(
-                iconData,
-                color:
-                    selectedVideoIndex == index ? Colors.white : Colors.black,
-              ),
-              title: Text(
-                video.name,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color:
-                      selectedVideoIndex == index ? Colors.white : Colors.black,
+            // Build thumbnail widget
+            Widget thumbnailWidget;
+            if (video.type == VideoType.network) {
+              if (_thumbnailLoading[index] == true) {
+                thumbnailWidget = Container(
+                  width: 120,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              } else if (_thumbnailCache[index] != null) {
+                thumbnailWidget = Container(
+                  width: 120,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[400]!),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: Image.memory(
+                      _thumbnailCache[index]!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.error, size: 24),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              } else {
+                thumbnailWidget = Container(
+                  width: 120,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[400]!),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.image_outlined,
+                          size: 24, color: Colors.grey[500]),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Thumbnail',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            } else {
+              thumbnailWidget = Container(
+                width: 120,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
                 ),
-              ),
-              subtitle: Text(
-                video.path,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color:
-                      selectedVideoIndex == index ? Colors.white : Colors.black,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(iconData, size: 24, color: Colors.grey[500]),
+                    const SizedBox(height: 4),
+                    Text(
+                      video.type.name.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              onTap: () async {
-                await _controller.stopRecording();
-                switch (video.type) {
-                  case VideoType.network:
-                    await _controller.setMediaFromNetwork(
+              );
+            }
+
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: ListTile(
+                selected: selectedVideoIndex == index,
+                selectedTileColor: Colors.blue[50],
+                leading: thumbnailWidget,
+                title: Text(
+                  video.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: selectedVideoIndex == index
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       video.path,
-                      hwAcc: HwAcc.full,
-                    );
-                    break;
-                  case VideoType.file:
-                    if (!mounted) break;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Copying file to temporary storage...'),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
                       ),
-                    );
-                    await Future<void>.delayed(const Duration(seconds: 1));
-                    final tempVideo = await _loadVideoToFs();
-                    await Future<void>.delayed(const Duration(seconds: 1));
-                    if (!context.mounted) break;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Now trying to play...'),
+                    ),
+                    if (video.type == VideoType.network &&
+                        _thumbnailCache[index] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle,
+                                size: 12, color: Colors.green[600]),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Thumbnail generated (${_thumbnailCache[index]!.length} bytes)',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.green[600],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-                    await Future<void>.delayed(const Duration(seconds: 1));
-                    if (await tempVideo.exists()) {
-                      await _controller.setMediaFromFile(tempVideo);
-                    } else {
+                  ],
+                ),
+                trailing: video.type == VideoType.network &&
+                        _thumbnailCache[index] == null &&
+                        _thumbnailLoading[index] != true
+                    ? IconButton(
+                        icon: const Icon(Icons.refresh, size: 20),
+                        onPressed: () => _generateThumbnail(index),
+                        tooltip: 'Generate thumbnail',
+                      )
+                    : Icon(
+                        selectedVideoIndex == index
+                            ? Icons.play_arrow
+                            : iconData,
+                        color: selectedVideoIndex == index ? Colors.blue : null,
+                      ),
+                onTap: () async {
+                  await _controller.stopRecording();
+                  switch (video.type) {
+                    case VideoType.network:
+                      await _controller.setMediaFromNetwork(
+                        video.path,
+                        hwAcc: HwAcc.full,
+                      );
+                      break;
+                    case VideoType.file:
+                      if (!mounted) break;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Copying file to temporary storage...'),
+                        ),
+                      );
+                      await Future<void>.delayed(const Duration(seconds: 1));
+                      final tempVideo = await _loadVideoToFs();
+                      await Future<void>.delayed(const Duration(seconds: 1));
                       if (!context.mounted) break;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('File load error.'),
+                          content: Text('Now trying to play...'),
                         ),
                       );
-                    }
-                    break;
-                  case VideoType.asset:
-                    await _controller.setMediaFromAsset(video.path);
-                    break;
-                  case VideoType.recorded:
-                    final recordedFile = File(video.path);
-                    await _controller.setMediaFromFile(recordedFile);
-                    break;
-                }
-                setState(() {
-                  selectedVideoIndex = index;
-                });
-              },
+                      await Future<void>.delayed(const Duration(seconds: 1));
+                      if (await tempVideo.exists()) {
+                        await _controller.setMediaFromFile(tempVideo);
+                      } else {
+                        if (!context.mounted) break;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('File load error.'),
+                          ),
+                        );
+                      }
+                      break;
+                    case VideoType.asset:
+                      await _controller.setMediaFromAsset(video.path);
+                      break;
+                    case VideoType.recorded:
+                      final recordedFile = File(video.path);
+                      await _controller.setMediaFromFile(recordedFile);
+                      break;
+                  }
+                  if (mounted) {
+                    setState(() {
+                      selectedVideoIndex = index;
+                    });
+                  }
+                },
+              ),
             );
           },
         ),

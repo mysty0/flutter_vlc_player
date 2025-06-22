@@ -888,6 +888,29 @@ class VlcPlayerController extends ValueNotifier<VlcPlayerValue> {
     return vlcPlayerPlatform.takeSnapshot(_viewId);
   }
 
+  /// Generate a thumbnail from a video file without needing to create a player instance.
+  /// This is a static method that works independently of any VlcPlayerController.
+  ///
+  /// [dataSource] - The video file path or URL
+  /// [width] - Desired thumbnail width (0 for original width)
+  /// [height] - Desired thumbnail height (0 for original height)
+  /// [position] - Position in video (0.0 to 1.0, where 0.5 is middle)
+  ///
+  /// Returns binary data (Uint8List) for the generated thumbnail image
+  static Future<Uint8List?> generateThumbnail({
+    required String dataSource,
+    int width = 0,
+    int height = 0,
+    double position = 0.5,
+  }) async {
+    return vlcPlayerPlatform.generateThumbnail(
+      dataSource: dataSource,
+      width: width,
+      height: height,
+      position: position,
+    );
+  }
+
   /// Get list of available renderer services which is supported by vlc library
   Future<List<String>> getAvailableRendererServices() async {
     _throwIfNotInitialized('getAvailableRendererServices');

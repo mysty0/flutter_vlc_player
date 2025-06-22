@@ -513,6 +513,81 @@ class MethodChannelVlcPlayer extends VlcPlayerPlatform {
   }
 
   @override
+  Future<Uint8List?> generateThumbnail({
+    required String dataSource,
+    int width = 0,
+    int height = 0,
+    double position = 0.5,
+  }) async {
+    // For now, we'll create a simple method channel call
+    // This will need to be properly integrated with the pigeon-generated API later
+    try {
+      const MethodChannel channel = MethodChannel(
+        'flutter_vlc_player/thumbnail',
+      );
+      final Map<String, dynamic> arguments = {
+        'uri': dataSource,
+        'width': width,
+        'height': height,
+        'position': position,
+      };
+
+      final result = await channel.invokeMethod('generateThumbnail', arguments);
+
+      String? base64String;
+      if (result is String) {
+        base64String = result;
+      } else if (result is Map && result['thumbnail'] is String) {
+        base64String = result['thumbnail'] as String;
+      }
+
+      if (base64String == null || base64String.isEmpty) {
+        print('Thumbnail generation returned null or empty result');
+        return null;
+      }
+
+      // Clean the base64 string to remove any whitespace/newlines
+      final cleanBase64 = base64String.replaceAll(RegExp(r'\s'), '');
+
+      print(
+        'Base64 string length: ${base64String.length}, cleaned length: ${cleanBase64.length}',
+      );
+      if (cleanBase64.length < 100) {
+        print('Base64 preview: $cleanBase64');
+      } else {
+        print(
+          'Base64 preview (first 100 chars): ${cleanBase64.substring(0, 100)}...',
+        );
+      }
+
+      final imageBytes = base64Decode(cleanBase64);
+      return imageBytes;
+    } catch (e) {
+      print('Error generating thumbnail: $e');
+      // Log more detailed error information
+      if (e.toString().contains('MediaMetadataRetriever') ||
+          e.toString().contains('THUMBNAIL_FAILED')) {
+        final isNetworkUrl =
+            dataSource.startsWith('http://') ||
+            dataSource.startsWith('https://');
+        if (isNetworkUrl) {
+          print(
+            'Note: Android thumbnail generation has limitations with network URLs. '
+            'This is a MediaMetadataRetriever limitation, not a VLC issue.',
+          );
+        } else {
+          print(
+            'Note: Android thumbnail generation failed for local file. '
+            'This could be due to unsupported codec, file permissions, or MediaMetadataRetriever limitations. '
+            'Supported formats: MP4, 3GP, MKV (with compatible codecs), AVI (with compatible codecs).',
+          );
+        }
+      }
+      return null;
+    }
+  }
+
+  @override
   Future<List<String>> getAvailableRendererServices(int viewId) async {
     final response = await _api.getAvailableRendererServices(
       ViewMessage()..viewId = viewId,

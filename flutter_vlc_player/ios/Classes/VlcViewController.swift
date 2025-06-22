@@ -145,6 +145,130 @@ public class VLCViewController: NSObject, FlutterPlatformView {
         return byteArray?.base64EncodedString()
     }
     
+    /// Generate thumbnail from video file using VLCMediaThumbnailer
+    /// - Parameters:
+    ///   - uri: The video file URI
+    ///   - width: Desired thumbnail width (0 for original)
+    ///   - height: Desired thumbnail height (0 for original)
+    ///   - position: Position in video (0.0 to 1.0, default is 0.5)
+    ///   - completion: Completion handler with base64 encoded image
+    public func generateThumbnail(
+        uri: String,
+        width: Int = 0,
+        height: Int = 0,
+        position: Float = 0.5,
+        completion: @escaping (String?) -> Void
+    ) {
+        print("🔧 [VLC Thumbnailer] Generating thumbnail for: \(uri)")
+        print("🔧 [VLC Thumbnailer] Size: \(width)x\(height), Position: \(position)")
+        
+        // Create VLCMedia from URI
+        guard let url = URL(string: uri) else {
+            print("❌ [VLC Thumbnailer] Invalid URI: \(uri)")
+            completion(nil)
+            return
+        }
+        
+        let media = VLCMedia(url: url)
+        print("✅ [VLC Thumbnailer] Created VLCMedia")
+        
+        // Create thumbnailer using the proper VLCKit approach
+        let thumbnailer = VLCMediaThumbnailer(
+            media: media,
+            delegate: nil,
+            andVLCLibrary: VLCLibrary.shared()
+        )
+        print("✅ [VLC Thumbnailer] Created VLCMediaThumbnailer")
+        
+        // Set thumbnail size
+        if width > 0 {
+            thumbnailer.thumbnailWidth = width
+        }
+        if height > 0 {
+            thumbnailer.thumbnailHeight = height
+        }
+        
+        // Set snapshot position (if supported)
+        if thumbnailer.responds(to: #selector(setter: VLCMediaThumbnailer.snapshotPosition)) {
+            thumbnailer.snapshotPosition = position
+        }
+        
+        print("🔧 [VLC Thumbnailer] Starting thumbnail fetch...")
+        
+        // Create delegate wrapper to handle the callback
+        let delegateWrapper = VLCThumbnailerDelegateWrapper(completion: completion)
+        thumbnailer.delegate = delegateWrapper
+        
+        // Store reference to prevent deallocation during async operation
+        objc_setAssociatedObject(
+            thumbnailer,
+            &VLCThumbnailerDelegateWrapper.associatedObjectKey,
+            delegateWrapper,
+            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+        
+        thumbnailer.fetchThumbnail()
+    }
+    
+    /// Static method for generating thumbnails without needing a view controller instance
+    public static func generateThumbnail(
+        from uri: String,
+        width: Int = 0,
+        height: Int = 0,
+        position: Float = 0.5,
+        completion: @escaping (String?) -> Void
+    ) {
+        print("🔧 [VLC Static Thumbnailer] Generating thumbnail for: \(uri)")
+        print("🔧 [VLC Static Thumbnailer] Size: \(width)x\(height), Position: \(position)")
+        
+        // Create VLCMedia from URI
+        guard let url = URL(string: uri) else {
+            print("❌ [VLC Static Thumbnailer] Invalid URI: \(uri)")
+            completion(nil)
+            return
+        }
+        
+        let media = VLCMedia(url: url)
+        print("✅ [VLC Static Thumbnailer] Created VLCMedia")
+        
+        // Create thumbnailer using the proper VLCKit approach
+        let thumbnailer = VLCMediaThumbnailer(
+            media: media,
+            delegate: nil,
+            andVLCLibrary: VLCLibrary.shared()
+        )
+        print("✅ [VLC Static Thumbnailer] Created VLCMediaThumbnailer")
+        
+        // Set thumbnail size
+        if width > 0 {
+            thumbnailer.thumbnailWidth = width
+        }
+        if height > 0 {
+            thumbnailer.thumbnailHeight = height
+        }
+        
+        // Set snapshot position (if supported)
+        if thumbnailer.responds(to: #selector(setter: VLCMediaThumbnailer.snapshotPosition)) {
+            thumbnailer.snapshotPosition = position
+        }
+        
+        print("🔧 [VLC Static Thumbnailer] Starting thumbnail fetch...")
+        
+        // Create delegate wrapper to handle the callback
+        let delegateWrapper = VLCThumbnailerDelegateWrapper(completion: completion)
+        thumbnailer.delegate = delegateWrapper
+        
+        // Store reference to prevent deallocation during async operation
+        objc_setAssociatedObject(
+            thumbnailer,
+            &VLCThumbnailerDelegateWrapper.associatedObjectKey,
+            delegateWrapper,
+            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+        
+        thumbnailer.fetchThumbnail()
+    }
+    
     public func getSpuTracksCount() -> NSNumber? {
         
         return NSNumber(value: self.vlcMediaPlayer.subtitles().count)
@@ -773,5 +897,47 @@ extension VLCMediaPlayer {
         return services
     }
     
+}
+
+/// Delegate wrapper for VLCMediaThumbnailer to handle thumbnail generation
+class VLCThumbnailerDelegateWrapper: NSObject, VLCMediaThumbnailerDelegate {
+    static var associatedObjectKey: UInt8 = 0
+    
+    private let completion: (String?) -> Void
+    
+    init(completion: @escaping (String?) -> Void) {
+        self.completion = completion
+        super.init()
+    }
+    
+    // MARK: - VLCMediaThumbnailerDelegate
+    
+    func mediaThumbnailer(_ mediaThumbnailer: VLCMediaThumbnailer, didFinishThumbnail thumbnail: CGImage?) {
+        print("✅ [VLC Thumbnailer] Successfully generated thumbnail")
+        
+        guard let thumbnail = thumbnail else {
+            print("❌ [VLC Thumbnailer] Thumbnail is nil")
+            completion(nil)
+            return
+        }
+        
+        // Convert CGImage to UIImage and then to base64
+        let uiImage = UIImage(cgImage: thumbnail)
+        guard let imageData = uiImage.pngData() else {
+            print("❌ [VLC Thumbnailer] Failed to convert thumbnail to PNG data")
+            completion(nil)
+            return
+        }
+        
+        let base64String = imageData.base64EncodedString()
+        print("✅ [VLC Thumbnailer] Converted thumbnail to base64, length: \(base64String.count)")
+        
+        completion(base64String)
+    }
+    
+    func mediaThumbnailerDidTimeOut(_ mediaThumbnailer: VLCMediaThumbnailer) {
+        print("⏰ [VLC Thumbnailer] Thumbnail generation timed out")
+        completion(nil)
+    }
 }
 

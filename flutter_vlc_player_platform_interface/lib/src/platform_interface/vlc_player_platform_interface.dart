@@ -302,6 +302,24 @@ abstract class VlcPlayerPlatform extends PlatformInterface {
     throw _unimplemented('takeSnapshot');
   }
 
+  /// Generate a thumbnail from a video file without needing a player instance.
+  /// This is a static method that works independently of any view.
+  ///
+  /// [dataSource] - The video file path or URL
+  /// [width] - Desired thumbnail width (0 for original width)
+  /// [height] - Desired thumbnail height (0 for original height)
+  /// [position] - Position in video (0.0 to 1.0, where 0.5 is middle)
+  ///
+  /// Returns binary data (Uint8List) for the generated thumbnail image, or null if failed
+  Future<Uint8List?> generateThumbnail({
+    required String dataSource,
+    int width = 0,
+    int height = 0,
+    double position = 0.5,
+  }) {
+    throw _unimplemented('generateThumbnail');
+  }
+
   /// Returns list of all available vlc renderer services
   Future<List<String>> getAvailableRendererServices(int viewId) {
     throw _unimplemented('getAvailableRendererServices');

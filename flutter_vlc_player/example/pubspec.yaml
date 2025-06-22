@@ -14,6 +14,9 @@ dependencies:
   flutter_vlc_player:
     path: ../
 
+  flutter_vlc_player_platform_interface:
+    path: ../../flutter_vlc_player_platform_interface
+
   path_provider: ^2.1.5
 
 dev_dependencies:
