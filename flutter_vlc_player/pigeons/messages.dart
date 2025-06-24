@@ -69,16 +69,6 @@ class SnapshotMessage {
   String? snapshot;
 }
 
-class ThumbnailMessage {
-  String? uri;
-  int? type;
-  String? packageName;
-  int? width;
-  int? height;
-  double? position;
-  String? thumbnail;
-}
-
 class SpuTracksMessage {
   int? viewId;
   Map<Object?, Object?>? subtitles;
@@ -179,8 +169,6 @@ abstract class VlcPlayerApi {
   void setPlaybackSpeed(PlaybackSpeedMessage msg);
   PlaybackSpeedMessage getPlaybackSpeed(ViewMessage msg);
   SnapshotMessage takeSnapshot(ViewMessage msg);
-  // thumbnail generation methods
-  ThumbnailMessage generateThumbnail(ThumbnailMessage msg);
   // captions & subtitles methods
   TrackCountMessage getSpuTracksCount(ViewMessage msg);
   SpuTracksMessage getSpuTracks(ViewMessage msg);

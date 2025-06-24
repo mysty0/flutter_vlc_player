@@ -587,6 +587,35 @@ class MethodChannelVlcPlayer extends VlcPlayerPlatform {
     }
   }
 
+  /// Extract video metadata including duration using VLC infrastructure
+  @override
+  Future<Map<String, dynamic>?> extractVideoMetadata({
+    required String dataSource,
+  }) async {
+    try {
+      const MethodChannel channel = MethodChannel(
+        'flutter_vlc_player/thumbnail',
+      );
+      final Map<String, dynamic> arguments = {
+        'uri': dataSource,
+        'extract_metadata': true,
+      };
+
+      final result = await channel.invokeMethod('extractMetadata', arguments);
+      print('extractVideoMetadata result: $result');
+      print('extractVideoMetadata result type: ${result.runtimeType}');
+
+      if (result is Map<dynamic, dynamic>) {
+        return result.cast<String, dynamic>();
+      }
+
+      return null;
+    } catch (e) {
+      print('Error extracting video metadata: $e');
+      return null;
+    }
+  }
+
   @override
   Future<List<String>> getAvailableRendererServices(int viewId) async {
     final response = await _api.getAvailableRendererServices(

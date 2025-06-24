@@ -363,6 +363,13 @@ abstract class VlcPlayerPlatform extends PlatformInterface {
     throw _unimplemented('stopRecording');
   }
 
+  /// Extract video metadata including duration
+  Future<Map<String, dynamic>?> extractVideoMetadata({
+    required String dataSource,
+  }) {
+    throw _unimplemented('extractVideoMetadata');
+  }
+
   Object _unimplemented(String methodName) {
     return UnimplementedError('$methodName has not been implemented.');
   }
